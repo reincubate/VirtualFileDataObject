@@ -809,7 +809,7 @@ namespace VirtualFileDataObject
             int[] finalEffect = new int[1];
             try
             {
-                NativeMethods.DoDragDrop(dataObject, new DropSource(), (int)allowedEffects, finalEffect);
+                NativeMethods.DoDragDrop(dataObject, new DropSource(dragSource), (int)allowedEffects, finalEffect);
             }
             finally
             {
@@ -827,11 +827,38 @@ namespace VirtualFileDataObject
             return (DragDropEffects)(finalEffect[0]);
         }
 
+        public static readonly RoutedEvent GiveFeedbackEvent = EventManager.RegisterRoutedEvent("GiveFeedback", RoutingStrategy.Bubble, typeof(GiveFeedbackEventHandler), typeof(VirtualFileDataObject));
+        public delegate void GiveFeedbackEventHandler(object sender, GiveFeedbackEventArgs args);
+        public sealed class GiveFeedbackEventArgs : RoutedEventArgs
+        {
+            public GiveFeedbackEventArgs(DragDropEffects effects)
+            {
+                Effects = effects;
+                UseDefaultCursors = true;
+            }
+            public DragDropEffects Effects { get; private set; }
+            public bool UseDefaultCursors { get; set; }
+        }
+        public static void AddGiveFeedbackHandler(DependencyObject element, GiveFeedbackEventHandler handler)
+        {
+            element.TryAddHandler(GiveFeedbackEvent, handler);
+        }
+        public static void RemoveGiveFeedbackHandler(DependencyObject element, GiveFeedbackEventHandler handler)
+        {
+            element.TryRemoveHandler(GiveFeedbackEvent, handler);
+        }
+
+
         /// <summary>
         /// Contains the methods for generating visual feedback to the end user and for canceling or completing the drag-and-drop operation.
         /// </summary>
         private class DropSource : NativeMethods.IDropSource
         {
+            readonly DependencyObject source;
+            public DropSource(DependencyObject source)
+            {
+                this.source = source;
+            }
             /// <summary>
             /// Determines whether a drag-and-drop operation should continue.
             /// </summary>
@@ -860,9 +887,13 @@ namespace VirtualFileDataObject
             /// <returns>This method returns S_OK on success.</returns>
             public int GiveFeedback(uint dwEffect)
             {
-                return NativeMethods.DRAGDROP_S_USEDEFAULTCURSORS;
+                var args = new GiveFeedbackEventArgs((DragDropEffects)dwEffect) { RoutedEvent = GiveFeedbackEvent };
+                source.TryRaiseEvent(args);
+                return args.UseDefaultCursors ? NativeMethods.DRAGDROP_S_USEDEFAULTCURSORS : NativeMethods.S_OK; 
             }
         }
+
+        
 
         /// <summary>
         /// Provides access to Win32-level constants, structures, and functions.
@@ -960,6 +991,43 @@ namespace VirtualFileDataObject
             {
                 return (0 <= hr);
             }
+        }
+    }
+
+    public static class EventExtensions
+    {
+        public static bool TryAddHandler(this DependencyObject @this, RoutedEvent routedEvent, Delegate handler)
+        {
+            if (@this is UIElement)
+                ((UIElement)@this).AddHandler(routedEvent, handler);
+            else if (@this is ContentElement)
+                ((ContentElement)@this).AddHandler(routedEvent, handler);
+            else if (@this is UIElement3D)
+                ((UIElement3D)@this).AddHandler(routedEvent, handler);
+            else return false;
+            return true;
+        }
+        public static bool TryRemoveHandler(this DependencyObject @this, RoutedEvent routedEvent, Delegate handler)
+        {
+            if (@this is UIElement)
+                ((UIElement)@this).RemoveHandler(routedEvent, handler);
+            else if (@this is ContentElement)
+                ((ContentElement)@this).RemoveHandler(routedEvent, handler);
+            else if (@this is UIElement3D)
+                ((UIElement3D)@this).RemoveHandler(routedEvent, handler);
+            else return false;
+            return true;
+        }
+        public static bool TryRaiseEvent(this DependencyObject @this, RoutedEventArgs eventArgs)
+        {
+            if (@this is UIElement)
+                ((UIElement)@this).RaiseEvent(eventArgs);
+            else if (@this is ContentElement)
+                ((ContentElement)@this).RaiseEvent(eventArgs);
+            else if (@this is UIElement3D)
+                ((UIElement3D)@this).RaiseEvent(eventArgs);
+            else return false;
+            return true;
         }
     }
 
